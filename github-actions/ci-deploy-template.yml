@@ -1,0 +1,72 @@
+# GitHub Actions Workflow Template
+# Description: Build and deploy an ASP.NET Core app to Azure Web App
+# Adapted from a real-world eCommerce app CI/CD pipeline
+
+name: ASP.NET Core App - Build and Deploy to Azure Web App
+
+# Trigger on push to main branch or manual run
+on:
+  push:
+    branches:
+      - main  # Adjust to your branch name if different
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build .NET App
+    runs-on: windows-latest
+    permissions:
+      contents: read  # Required for actions/checkout
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'  # Change to match your project version
+
+      - name: Build Solution
+        run: dotnet build --configuration Release
+
+      - name: Publish App
+        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-app
+          path: ${{env.DOTNET_ROOT}}/myapp
+
+  deploy:
+    name: Deploy to Azure
+    runs-on: windows-latest
+    needs: build
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    permissions:
+      id-token: write   # Required for OIDC authentication
+      contents: read    # Required for actions/checkout
+
+    steps:
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dotnet-app
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'your-app-name-here'          # Replace with your Azure Web App name
+          slot-name: 'Production'
+          package: .
